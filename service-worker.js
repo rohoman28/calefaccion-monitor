@@ -28,7 +28,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // API calls: network-first
-  if (url.hostname.includes('preciodelaluz') || url.hostname.includes('ree.es')) {
+  if (url.hostname.includes('ree.es')) {
     event.respondWith(
       fetch(event.request)
         .then((res) => {

@@ -252,58 +252,15 @@ class CalefaccionApp {
    *
    * NUNCA puede ser negativo (a diferencia del precio spot del mercado mayorista).
    *
-   * Fuente principal: api.preciodelaluz.org (devuelve PVPC directamente)
-   * Fuente secundaria: apidatos.ree.es (filtrar SOLO la serie PVPC)
+   * Fuente única y oficial: apidatos.ree.es (filtrando SOLO la serie PVPC)
    */
   async fetchPVPCPrices(date) {
     const dateStr = this.formatDate(date);
-    const today = this.formatDate(new Date());
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = this.formatDate(tomorrow);
 
     // ============================================
-    // FUENTE 1: api.preciodelaluz.org (PVPC hoy/mañana)
-    // Esta API devuelve directamente el PVPC al consumidor.
-    // Funciona para hoy, y para mañana después de ~20:30.
-    // ============================================
-    if (dateStr === today || dateStr === tomorrowStr) {
-      try {
-        const res = await fetch('https://api.preciodelaluz.org/v1/prices/all?zone=PCB');
-        if (res.ok) {
-          const data = await res.json();
-          const prices = this.parsePrecioDeLaLuz(data);
-
-          // Verificar que los datos corresponden al día pedido
-          // y que todos los precios son positivos (PVPC)
-          if (prices.length >= 20 && prices.every(p => p.price > 0)) {
-            // Comprobar si la API devuelve hoy o mañana
-            // (después de 20:30 puede devolver mañana)
-            const firstEntry = Object.values(data)[0];
-            if (firstEntry && firstEntry.date) {
-              const apiDate = firstEntry.date.split('-').reverse().join('-');
-              // Si coincide con lo que buscamos, perfecto
-              if (apiDate === dateStr || dateStr === today) {
-                return { prices, source: 'pvpc' };
-              }
-            } else {
-              // Sin campo date, asumimos que es hoy
-              if (dateStr === today) {
-                return { prices, source: 'pvpc' };
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('preciodelaluz.org no disponible:', e.message);
-      }
-    }
-
-    // ============================================
-    // FUENTE 2: apidatos.ree.es — Red Eléctrica
-    // IMPORTANTE: Este endpoint devuelve VARIAS series:
-    //   - Precio mercado spot (PUEDE SER NEGATIVO — NO USAR)
-    //   - PVPC T.D. (precio al consumidor — USAR ESTE)
+    // FUENTE OFICIAL: apidatos.ree.es — Red Eléctrica
+    // IMPORTANTE: Este endpoint devuelve VARIAS series.
+    // Buscaremos SÓLO la serie cuyo título contenga "PVPC".
     // ============================================
     try {
       const startDate = `${dateStr}T00:00`;
@@ -327,27 +284,6 @@ class CalefaccionApp {
     // ============================================
     console.warn(`Usando precios PVPC simulados para ${dateStr}`);
     return { prices: this.generateSimulatedPrices(date), source: 'simulado' };
-  }
-
-  /**
-   * Parsear respuesta de api.preciodelaluz.org
-   * Los precios vienen en €/MWh → convertimos a €/kWh
-   */
-  parsePrecioDeLaLuz(data) {
-    const prices = [];
-    for (let h = 0; h < 24; h++) {
-      const key = `${String(h).padStart(2, '0')}-${String(h + 1).padStart(2, '0')}`;
-      if (data[key] && data[key].price !== undefined) {
-        const priceKwh = data[key].price / 1000;
-        prices.push({
-          hour: h,
-          price: Math.max(0.001, priceKwh), // PVPC nunca negativo
-          isCheap: data[key]['is-cheap'] || false,
-          isUnderAvg: data[key]['is-under-avg'] || false,
-        });
-      }
-    }
-    return prices;
   }
 
   /**

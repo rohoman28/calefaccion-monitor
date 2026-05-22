@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="description" content="Optimiza el consumo de tus radiadores con precios PVPC de Red Eléctrica en tiempo real. Se actualiza automáticamente cada día a las 20:30.">
+  <title>🔥 Control de Calefacción</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#ff6b35">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Calefacción">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230a0a14'/><text y='.9em' x='10' font-size='80'>🔥</text></svg>">
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔥</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ===== HEADER ===== -->
+    <header class="app-header" id="app-header">
+      <div class="logo">
+        <div class="logo-icon">🔥</div>
+        <div class="logo-text">
+          <h1>Control de Calefacción</h1>
+          <p>Optimizador con precios PVPC</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="price-badge" id="price-badge">
+          <span class="dot"></span>
+          <span id="price-display">Cargando...</span>
+        </div>
+        <div class="clock-display" id="clock-display">--:--</div>
+      </div>
+    </header>
+
+    <!-- Auto-update banner -->
+    <div id="auto-update-banner"></div>
+
+    <!-- ===== DASHBOARD ===== -->
+    <div class="dashboard-grid">
+      <aside class="config-panel">
+        <div class="config-card">
+          <h3><span class="icon">⚡</span> Contrato Eléctrico</h3>
+          <div class="form-group">
+            <label>Potencia Contratada</label>
+            <div class="input-with-unit">
+              <input type="number" id="potencia-contratada" value="4.6" step="0.1" min="0.1" inputmode="decimal">
+              <span class="unit">kW</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Precio Potencia</label>
+            <div class="input-with-unit">
+              <input type="number" id="precio-potencia" value="30.0" step="0.5" min="0" inputmode="decimal">
+              <span class="unit">€/kW año</span>
+            </div>
+          </div>
+        </div>
+        <div class="config-card">
+          <h3><span class="icon">💡</span> Precio Energía</h3>
+          <div class="toggle-row">
+            <label>Precio automático (PVPC)</label>
+            <label class="toggle">
+              <input type="checkbox" id="auto-price-toggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="form-group" id="manual-price-group" style="display:none; margin-top:14px">
+            <label>Precio manual</label>
+            <div class="input-with-unit">
+              <input type="number" id="precio-manual" value="0.15" step="0.01" min="0" inputmode="decimal">
+              <span class="unit">€/kWh</span>
+            </div>
+          </div>
+          <div id="data-source" style="margin-top:10px;font-size:0.72rem"></div>
+        </div>
+        <div class="config-card">
+          <h3><span class="icon">💾</span> Datos</h3>
+          <div class="io-buttons">
+            <button class="btn-io" onclick="app.exportConfig()">📤 Exportar</button>
+            <button class="btn-io" onclick="document.getElementById('import-file').click()">📥 Importar</button>
+          </div>
+          <input type="file" id="import-file" class="hidden-input" accept=".json" onchange="app.importConfig(event)">
+        </div>
+      </aside>
+
+      <main class="main-dashboard">
+        <div class="metrics-row">
+          <div class="metric-card" id="metric-consumo">
+            <div class="metric-icon">⚡</div>
+            <div class="metric-label">Consumo Diario</div>
+            <div class="metric-value"><span id="val-consumo">0.00</span><span class="unit">kWh</span></div>
+            <div class="metric-sub" id="sub-consumo"></div>
+          </div>
+          <div class="metric-card" id="metric-coste">
+            <div class="metric-icon">💰</div>
+            <div class="metric-label">Gasto Medio</div>
+            <div class="metric-value"><span id="val-coste">0.00</span><span class="unit">€</span></div>
+            <div class="metric-sub" id="sub-coste"></div>
+          </div>
+          <div class="metric-card" id="metric-potencia">
+            <div class="metric-icon">🔌</div>
+            <div class="metric-label">Potencia Total</div>
+            <div class="metric-value"><span id="val-potencia">0.00</span><span class="unit">kW</span></div>
+            <div class="metric-sub" id="sub-potencia"></div>
+          </div>
+          <div class="metric-card" id="metric-radiadores">
+            <div class="metric-icon">📻</div>
+            <div class="metric-label">Radiadores</div>
+            <div class="metric-value"><span id="val-radiadores">0</span></div>
+            <div class="metric-sub" id="sub-radiadores"></div>
+          </div>
+        </div>
+        <div id="power-alert-container"></div>
+        <div class="charts-row">
+          <div class="chart-card">
+            <h3><span class="icon">📊</span> Consumo por Radiador</h3>
+            <div class="chart-container"><canvas id="chart-consumo"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3><span class="icon">🔥</span> Potencia Instantánea</h3>
+            <div class="chart-container gauge-wrapper">
+              <svg class="gauge-svg" viewBox="0 0 200 120">
+                <path class="gauge-bg" d="M 20 100 A 80 80 0 0 1 180 100" />
+                <path class="gauge-fill" id="gauge-fill" d="M 20 100 A 80 80 0 0 1 180 100" />
+                <text class="gauge-text" x="100" y="88" text-anchor="middle" font-size="26" id="gauge-value">0.0</text>
+                <text class="gauge-label" x="100" y="108" id="gauge-sublabel">de 4.6 kW</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- ===== PRECIOS HORARIOS ===== -->
+    <div class="section-title-row">
+      <h2>💡 Precios PVPC</h2>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <div class="view-tabs">
+          <button class="view-tab active" id="tab-dia" onclick="app.setView('dia')">Día</button>
+          <button class="view-tab" id="tab-mes" onclick="app.setView('mes')">Mes</button>
+        </div>
+        <div class="date-navigator">
+          <button class="btn-nav" id="btn-prev" onclick="app.changeDate(-1)">◀</button>
+          <div class="date-display">
+            <span id="date-label">--</span>
+            <span class="date-sub" id="date-sub-label"></span>
+          </div>
+          <button class="btn-nav" id="btn-next" onclick="app.changeDate(1)">▶</button>
+        </div>
+      </div>
+    </div>
+    <div class="price-chart-area">
+      <div class="price-chart-header">
+        <h3><span class="icon">📈</span> <span id="price-chart-title">Precio PVPC por hora</span></h3>
+        <div class="price-stats">
+          <div class="price-stat"><div class="stat-label">Mínimo</div><div class="stat-value low" id="stat-min">--</div></div>
+          <div class="price-stat"><div class="stat-label">Media</div><div class="stat-value mid" id="stat-avg">--</div></div>
+          <div class="price-stat"><div class="stat-label">Máximo</div><div class="stat-value high" id="stat-max">--</div></div>
+        </div>
+      </div>
+      <div class="price-chart-container" id="price-chart-container">
+        <canvas id="chart-prices"></canvas>
+      </div>
+    </div>
+
+    <!-- ===== RADIADORES ===== -->
+    <div class="section-header">
+      <h2>📻 Tus Radiadores <span class="count-badge" id="radiador-count">0</span></h2>
+      <button class="btn-add" onclick="app.addRadiador()"><span>＋</span> Añadir Radiador</button>
+    </div>
+    <div class="radiadores-grid" id="radiadores-grid"></div>
+    <button class="btn-optimize" id="btn-optimize" onclick="app.runOptimization()">🧠 Calcular Horario Óptimo</button>
+
+    <!-- ===== OPTIMIZACIÓN ===== -->
+    <section class="optimization-section" id="optimization-section" style="display:none">
+      <h2>🧠 Horario Óptimo</h2>
+      <p class="opt-subtitle" id="opt-subtitle"></p>
+      <div class="cost-comparison" id="cost-comparison"></div>
+      <div class="schedule-grid-wrapper"><div class="schedule-grid" id="schedule-grid"></div></div>
+      <div class="opt-grid">
+        <div class="opt-card"><h4>Coste Semanal</h4><div class="opt-value amber" id="opt-semanal">0.00 €</div><div class="opt-sub">Proyección 7 días</div></div>
+        <div class="opt-card"><h4>Coste Mensual</h4><div class="opt-value gold" id="opt-mensual">0.00 €</div><div class="opt-sub">Proyección 30 días</div></div>
+        <div class="opt-card"><h4>Coste Anual</h4><div class="opt-value red" id="opt-anual">0.00 €</div><div class="opt-sub">Incluye potencia</div></div>
+      </div>
+      <div class="tips-list" id="tips-list"></div>
+    </section>
+
+    <footer class="app-footer">
+      Precios PVPC vía Red Eléctrica. Se actualiza automáticamente a las 20:30 con los precios de mañana.<br>
+      Instala esta app en tu móvil: Android → ⋮ → "Añadir a pantalla inicio" · iPhone → ⎙ → "Añadir a inicio"
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
